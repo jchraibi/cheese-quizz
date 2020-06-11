@@ -14,7 +14,7 @@ A fun cheese quizz deployed on OpenShift and illustrating cloud native technolog
 
 ## Start here for viewing the code
 
-[![Contribute](https://che.openshift.io/factory/resources/factory-contribute.svg)](http://codeready-toolchain-workspaces.apps.ocp4.cloud.openshift.fr/f?url=https://github.com/lbroudoux/cheese-quizz)
+[![Contribute](https://che.openshift.io/factory/resources/factory-contribute.svg)](http://codeready-toolchain-workspaces.apps.ocp4.cloud.openshift.fr/f?url=https://github.com/jchraibi/cheese-quizz)
 
 ## Cluster Setup
 
