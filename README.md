@@ -14,13 +14,13 @@ A fun cheese quizz deployed on OpenShift and illustrating cloud native technolog
 
 ## Start here for viewing the code
 
-[![Contribute](https://che.openshift.io/factory/resources/factory-contribute.svg)](https://codeready-workspaces.apps.cluster-lemans-0014.lemans-0014.example.opentlc.com/f?url=https://github.com/lbroudoux/cheese-quizz)
+[![Contribute](https://che.openshift.io/factory/resources/factory-contribute.svg)](http://codeready-toolchain-workspaces.apps.ocp4.cloud.openshift.fr/f?url=https://github.com/lbroudoux/cheese-quizz)
 
 ## Cluster Setup
 
 Please initialize and configure following operators in this order:
 
-> All the components below can be setup using my `cluster-init.sh` script that you may find [here](https://github.com/lbroudoux/openshift-cases/tree/master/cluster-init/ocp-4.4).
+> All the components below can be setup using my `cluster-init.sh` script that you may find [here](https://github.com/jchraibi/openshift-cases/tree/master/cluster-init/ocp-4.4).
 
 * Istio Service Mesh deployed with `basic-install` on `istio-system` project
   * Take care of removing `LimitRanges` into `cheese-quizz` project
