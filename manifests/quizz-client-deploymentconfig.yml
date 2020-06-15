@@ -20,7 +20,7 @@ metadata:
     app.openshift.io/runtime: quarkus
   annotations:
     app.openshift.io/vcs-ref: master
-    app.openshift.io/vcs-uri: 'https://github.com/lbroudoux/cheese-quizz'
+    app.openshift.io/vcs-uri: 'https://github.com/jchraibi/cheese-quizz'
 spec:
   strategy:
     type: Rolling
