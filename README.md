@@ -14,7 +14,7 @@ A fun cheese quizz deployed on OpenShift and illustrating cloud native technolog
 
 ## Start here for viewing the code
 
-[![Contribute](https://che.openshift.io/factory/resources/factory-contribute.svg)](http://codeready-toolchain-workspaces.apps.ocp4.cloud.openshift.fr/f?url=https://github.com/jchraibi/cheese-quizz)
+[![Contribute](https://www.eclipse.org/che/contribute.svg)](https://codeready-workspaces.apps.cluster-lemans-ff7f.lemans-ff7f.example.opentlc.com/f?url=https://github.com/lbroudoux/cheese-quizz)
 
 ## Cluster Setup
 
@@ -113,7 +113,7 @@ oc rollout latest cheese-quizz-client -n cheese-quizz
 
 ## Demonstration scenario
 
-Once above commands are issued and everything successfully deployed, retrieve the Cheese Quzz route:
+Once above commands are issued and everything successfully deployed, retrieve the Cheese Quizz route:
 
 ```
 $ oc get route/cheese-quizz-client -n cheese-quizz |grep cheese-quizz-client |awk '{print $2}' 
@@ -131,7 +131,7 @@ and open it into a browser. You should get the following:
 Introduce new `v2` question using Canary Release and header-matching routing rules:
 
 ```
-oc apply -f manifests/vs-cheese-quizz-question-virtualservice-v1-v2-canary.yml -n cheese-quizz
+oc apply -f istiofiles/vs-cheese-quizz-question-v1-v2-canary.yml -n cheese-quizz
 ```
 
 Using the hamburger menu on the GUI, you should be able to subscribe the `Beta Program` and see the new Emmental question appear ;-) 
@@ -143,13 +143,13 @@ Now turning on the `Auto Refresh` feature, you should be able to visualize every
 Once we're confident with the `v2` Emmental question, we can turn on Blue-Green deployment process using weighted routes on the Istio `VirtualService`. We apply a 70-30 repartition:
 
 ```
-oc apply -f manifests/vs-cheese-quizz-question-virtualservice-v1-70-v2-30.yml -n cheese-quizz
+oc apply -f istiofiles/vs-cheese-quizz-question-v1-70-v2-30.yml -n cheese-quizz
 ```
 
 Of course we can repeat the same kind of process and finally introduce our `v3` Camembert question into the game. Finally, we may choose to route evenly to all the different quizz questions, applying a even load-balancer rules on the `VirtualService`: 
 
 ```
-oc apply -f manifests/vs-cheese-quizz-question-virtualservice-all.yml -n cheese-quizz
+oc apply -f istiofiles/vs-cheese-quizz-question-all.yml -n cheese-quizz
 ```
 
 #### Circuit breaker and observability
@@ -161,7 +161,7 @@ Start by simulating some issues on the `v2` deployed Pod. For that, we can remot
 ```
 $ oc get pods -n cheese-quizz | grep v2
 cheese-quizz-question-v2-847df79bd8-9c94t                        2/2     Running     0          5d19h
-$ oc rsh cheese-quizz-question-v2-847df79bd8-9c94t
+$ oc rsh -n cheese-quizz cheese-quizz-question-v2-847df79bd8-9c94t
 ----------- TERMINAL MODE: --------------------
 Defaulting container name to greeter-service.
 Use 'oc describe pod/cheese-quizz-question-v2-847df79bd8-9c94t -n cheese-quizz' to see all of the containers in this pod.
@@ -210,7 +210,7 @@ An optimal way of managing this kind of issue would be to declare a `CircuitBrea
 Let's apply the circuit breaker configuration to our question `DestinationRule`:
 
 ```
-oc apply -f istiofiles/dr-cheese-quizz-question-cb -n cheese-quizz
+oc apply -f istiofiles/dr-cheese-quizz-question-cb.yml -n cheese-quizz
 ```
 
 Checking the traces once again in Kiali, you should no longer see any errors! 
@@ -224,7 +224,7 @@ Start by simulating some latencies on the `v3` deployed Pod. For that, we can re
 ````
 $ oc get pods -n cheese-quizz | grep v3
 cheese-quizz-question-v3-9cfcfb894-tjtln                         2/2     Running     0          6d1h
-$ oc rsh cheese-quizz-question-v3-9cfcfb894-tjtln
+$ oc rsh -n cheese-quizz cheese-quizz-question-v3-9cfcfb894-tjtln
 ----------- TERMINAL MODE: --------------------
 Defaulting container name to greeter-service.
 Use 'oc describe pod/cheese-quizz-question-v3-9cfcfb894-tjtln -n cheese-quizz' to see all of the containers in this pod.
@@ -271,6 +271,33 @@ Once applied, you should not see errors on the GUI anymore. When digging deep di
 The Kiali console grap allow to check that - from a end user point of view - the service is available and green. We can see that time-to-time the HTTP throughput on `v3` may be reduced due to some failing attempts but we have now great SLA even if we've got one `v2` Pod failing and one `v3` Pod having response time issues:
 
 ![kiali-all-cb-timeout-retry](./assets/kiali-all-cb-timeout-retry.png)
+
+#### Direct access through a Gateway
+
+So far we always used the classical way of entering the application through `cheese-quizz-client` pods only. It's now time to see how to use a `Gateway`. Gateway configurations are applied to standalone Envoy proxies that are running at the edge of the mesh, rather than sidecar Envoy proxies running alongside your service workloads.
+
+Before creating `Gateway` and updating the `VirtualService` to be reached by the gateway, you will needs to adapt the full `host` name in both resources below. Then apply them:
+
+```
+oc apply -f istiofiles/ga-cheese-quizz-question.yml -n cheese-quizz
+oc apply -f istiofiles/vs-cheese-quizz-question-all-gateway.yml -n cheese-quizz
+```
+
+OpenShift takes care of creating a `Route` for each and every `Gateway`. The new route is created into your mesh control plane namespace (`istio-system` here).
+
+```
+$ oc get routes -n istio-system | grep cheese-quizz-question | awk '{print $2}'
+cheese-quizz-question.apps.cluster-fdee.fdee.example.opentlc.com
+```
+
+You should now be able to directly call the `cheese-quizz-question` VirtualService: 
+
+```
+$ curl http://cheese-quizz-question.apps.cluster-fdee.fdee.example.opentlc.com/api/cheese
+hello%
+```
+
+> When working with Maistra/OpenShift Service Mesh v2.0, `enabledAutoMtls` is set to `true` by default into `istio-config` config map. This made your access wrapped into MTLS communication (between client and question OR between gateway and question) by default.
 
 #### Security with MTLS
 
@@ -503,8 +530,105 @@ You can track activity of the integration route, looking at the **Activity** tab
 
 ![syndesis-activity](./assets/syndesis-activity.png)
 
-### ArgoCD bonus demonstration ;-)
 
+## GitOps setup
+
+You can use the resources from the `gitops/` folder of this repository to deploy a simplest form of the application using GitOps tooling.
+
+> We just published a simplest version for sake of simplicity but all the resources involved involved in the complex scenario may also be deployed the same manner :wink:
+
+In order to efficiently manage our Kubernetes resources within the Git repository, we have used [Kustomize](https://kustomize.io/).
+
+The default `base` configuration will deploy a quizz question referencing the **Cheddar** cheese and will present only 1 replica within the question deployment. The overlay `cluster1` configuration will override the cheese and will only display **Emmental**, it will also ask for 2 replicas within the question deployment.
+
+We will apply GitOps deployment for `cluster1` configuration.
+
+### Open Cluster Management way
+
+[Open Cluster Management](https://open-cluster-management.io/) is the upstream community project bringing Multi-cluster Management features for Kubernetes and specially for OpenShift in a flavour called [Red Hat Advanced Cluster Management](https://access.redhat.com/documentation/en-us/red_hat_advanced_cluster_management_for_kubernetes/2.1/).
+
+We can use RHCAM to ensure our cheese-quizz application is deployed on one or more cluster.
+
+On the Hub cluster, start creating the required namespaces:
+
+```sh
+kubectl create ns cheese-quizz
+kubectl create ns githubcom-lbroudoux-cheese-quizz-ns
 ```
+
+Then apply the resource from the `ocmfiles/` folder:
+
+```sh
+oc apply -f ocmfiles/cheese-quizz-channel.yml
+oc apply -f ocmfiles/cheese-quizz-application.yml
+```
+<<<<<<< HEAD
 oc -n argocd apply -f https://raw.githubusercontent.com/argoproj/argo-cd/v1.4.2/manifests/install.yaml
 ```
+=======
+
+The application `PlacementRules` are such that every registered cluster having the label `environment=dev` will received a deployment of the application.
+
+We can check in below screenshot that the customization required have being applied (2 pods present in `ReplicaSet`):
+
+![gitops-ocm-deployment](./assets/gitops-ocm-deployment.png)
+
+### ArgoCD way
+
+[Argo CD](https://argoproj.github.io/argo-cd/) is a declarative, GitOps continuous delivery tool for Kubernetes. The project was admitted into CNCF in April 2020 and since then it attracted more and more users and contributors.
+
+Argo CD can be easily installed on Kubernetes through an Operator and be tighly integrated with OpenShift RBAC system (see [this blog](https://www.openshift.com/blog/openshift-authentication-integration-with-argocd)). It's really easy to install on OpenShift has shown in [this video](https://www.youtube.com/watch?v=xYCX2EejSMc).
+
+> You can reuse the `ArgoCD` custom resource [here](argofiles/argocd-cr.yml).
+
+It's really easy to setup Argo for the host Kubernetes cluster deployment. Here below we're going to detail how to do the setup in a multi-cluster environment to compare with OCM/RHACM above.
+
+First login to remote cluster - ie. we one you didn't install ArgoCD on - using a user having `cluster:admin` role and define a Kube context:
+
+```sh
+oc login https://api.cluster1.example.opentlc.com:6443/
+oc config rename-context $(oc config current-context) cluster1
+```
+
+Once done, you have to login to ArgoCD using the `argocd` CLI tool. Because we have setup the OpenShift login integration, we have to specify `--sso` flag.
+
+```sh
+argocd --insecure login argocd-server-argocd.apps.cluster0.example.opentlc.com:443 --sso
+```
+
+This command should open a browser for authenticating. If like me you encounter trouble with Safari (default browser) not resolving `localhost`, you may just have to `curl` the callback URL in a terminal for finalizing the login process.
+
+Then, you can now list the clusters:
+
+```sh
+$ argocd --insecure cluster list
+SERVER                          NAME        VERSION  STATUS   MESSAGE
+https://kubernetes.default.svc  in-cluster           Unknown  Cluster has no application and not being monitored.
+
+```
+
+And add a new one from our Kube context before listing them again:
+
+```sh
+$ argocd --insecure cluster add cluster1
+INFO[0000] ServiceAccount "argocd-manager" created in namespace "kube-system" 
+INFO[0000] ClusterRole "argocd-manager-role" created    
+INFO[0000] ClusterRoleBinding "argocd-manager-role-binding" created 
+Cluster 'https://api.cluster1.example.opentlc.com:6443' added
+
+$ argocd --insecure cluster list
+SERVER                                                  NAME          VERSION  STATUS      MESSAGE
+https://api.cluster1.example.opentlc.com:6443           cluster1      1.19     Successful  
+https://kubernetes.default.svc                          in-cluster             Unknown     Cluster has no application and not being monitored.
+```
+
+Final step, you just have to create the `Application` within ArgoCD. You can do that through UI or just by creating the `Application` resource within `argocd` namespace (where we install ArgoCD on cluster0).
+
+```sh
+oc apply -f argofiles/cheese-quizz-application.yml
+```
+
+We can check in below screenshot that the customization required have being applied (2 pods present in `ReplicaSet`):
+
+![gitops-argocd-deployment](./assets/gitops-argocd-deployment.png)
+>>>>>>> upstream/master
